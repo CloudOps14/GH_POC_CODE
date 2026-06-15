@@ -1,0 +1,135 @@
+name: CI-CD with Automation Testing
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+
+  pull_request:
+    branches:
+      - main
+
+  workflow_dispatch:
+
+jobs:
+
+  build:
+
+    runs-on: ubuntu-latest
+
+    steps:
+
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Build Validation
+        run: |
+          echo "Build Successful"
+
+  unit-tests:
+
+    needs: build
+
+    runs-on: ubuntu-latest
+
+    steps:
+
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Dependencies
+        run: |
+          pip install -r requirements.txt
+
+      - name: Run Unit Tests
+        run: |
+          pytest tests/unit -v \
+          --junitxml=unit-test-report.xml
+
+      - name: Upload Unit Test Results
+        uses: actions/upload-artifact@v4
+        with:
+          name: unit-test-report
+          path: unit-test-report.xml
+
+  automation-tests:
+
+    needs: unit-tests
+
+    runs-on: ubuntu-latest
+
+    steps:
+
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Test Dependencies
+        run: |
+          pip install selenium pytest
+          pip install -r requirements.txt
+
+      - name: Execute Automation Tests
+        run: |
+          pytest tests/automation \
+          -v \
+          --junitxml=automation-report.xml
+
+      - name: Upload Automation Results
+        uses: actions/upload-artifact@v4
+        with:
+          name: automation-report
+          path: automation-report.xml
+
+  security-scan:
+
+    needs: automation-tests
+
+    runs-on: ubuntu-latest
+
+    steps:
+
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+
+      - name: Install Security Tools
+        run: |
+          pip install bandit
+
+      - name: Run Security Scan
+        run: |
+          bandit -r .
+
+  deploy:
+
+    needs:
+      - security-scan
+
+    runs-on: ubuntu-latest
+
+    steps:
+
+      - name: Deploy Application
+        run: |
+          echo "Deploying Application"
+          echo "Deployment Successful"
