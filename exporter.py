@@ -45,8 +45,8 @@ REPO_EXCLUDE = [
     if x.strip()
 ]
 
-LOKI_URL = os.getenv(
-    "LOKI_URL",
+LOKI_PUSH_URL = os.getenv(
+    "LOKI_PUSH_URL",
     ""
 )
 
@@ -124,12 +124,20 @@ FAILED_JOB = Gauge(
 FAILED_STEP = Gauge(
     "github_failed_step",
     "Failed steps",
-    ["repo", "workflow", "job", "step"]
+    ["repo", "workflow", "job", "step",  "run_id", "run_url"]
 )
 
-PIPELINE_INFO = Info(
+PIPELINE_INFO = Gauge(
     "github_pipeline_info",
-    "Pipeline information"
+    "Pipeline information",
+    [
+        "repo",
+        "workflow",
+        "branch",
+        "status",
+        "run_id",
+        "run_url"
+    ]
 )
 
 # ---------------------------------------------------
@@ -487,7 +495,7 @@ def send_loki_batch(
     lines
 ):
 
-    if not LOKI_URL:
+    if not LOKI_PUSH_URL:
         return
 
     if not lines:
@@ -533,7 +541,7 @@ def send_loki_batch(
         }
 
         response = requests.post(
-            LOKI_URL,
+            LOKI_PUSH_URL,
             json=payload,
             timeout=30
         )
@@ -760,6 +768,11 @@ def update_metrics():
                 "id"
             )
 
+            run_url = run.get(
+                "html_url",
+                ""
+            )
+
             # ----------------------------------------
             # WORKFLOW STATUS
             # ----------------------------------------
@@ -818,14 +831,14 @@ def update_metrics():
             # PIPELINE INFO
             # ----------------------------------------
 
-            PIPELINE_INFO.info({
-                "repo": repo,
-                "workflow": workflow,
-                "branch": branch,
-                "status": str(status),
-                "run_id": str(run_id)
-            })
-
+            PIPELINE_INFO.labels(
+                repo,
+                workflow,
+                branch,
+                str(status),
+                str(run_id),
+                run_url
+            ).set(1)
             # ----------------------------------------
             # PUSH LOGS TO LOKI
             # ----------------------------------------
@@ -883,10 +896,9 @@ def update_metrics():
                             repo,
                             workflow,
                             job_name,
-                            step.get(
-                                "name",
-                                "unknown"
-                            )
+                            step.get("name", "unknown"),
+                            str(run_id),
+                            run.get("html_url", "")
                         ).set(1)
 
         # ----------------------------------------
